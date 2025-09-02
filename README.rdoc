@@ -1,0 +1,6 @@
+= redc
+
+Describe your project here
+
+:include:redc.rdoc
+

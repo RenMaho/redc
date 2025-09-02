@@ -1,18 +1,41 @@
+PATH
+  remote: .
+  specs:
+    redc (0.0.1)
+      gli (~> 2.22.2)
+
 GEM
   remote: https://rubygems.org/
   specs:
+    bigdecimal (3.2.2)
     csv (3.3.5)
+    date (3.4.1)
+    erb (5.0.2)
     gli (2.22.2)
       ostruct
+    minitest (5.25.5)
     ostruct (0.6.3)
+    psych (5.2.6)
+      date
+      stringio
+    rake (13.3.0)
+    rdoc (6.14.2)
+      erb
+      psych (>= 4.0.0)
+    stringio (3.1.7)
 
 PLATFORMS
   ruby
   x86_64-linux
 
 DEPENDENCIES
+  bigdecimal
   csv
   gli
+  minitest
+  rake
+  rdoc
+  redc!
 
 BUNDLED WITH
    2.6.9
