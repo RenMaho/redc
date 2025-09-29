@@ -14,7 +14,7 @@ class App
   subcommand_option_handling :normal
   arguments :strict
 
-  desc 'DCDC Feedback Voltage Divider Resistor Combination'
+  desc 'DC-DC Feedback Voltage Divider Resistor Combination'
   command :rfbc do |c|
     c.desc 'Vout (V)'
     c.flag :vout, required: true, type: Float
@@ -58,14 +58,66 @@ class App
       end
 
       resistor_combination_results = resistor_combination_results.sort_by { |result| result[:relative_error] }
-      puts format("%-15s %-15s %-15s", "ResistorTop", "ResistorBottom", "RelativeError")
-      puts "-"*45
+      puts format('%-15s %-15s %-15s', 'ResistorTop', 'ResistorBottom', 'RelativeError')
+      puts '-' * 45
       resistor_combination_results.each do |result|
         rt = DCDCFeedbackVoltageDividerResistorCombination.format_unit(result[:resistor_top])
         rb = DCDCFeedbackVoltageDividerResistorCombination.format_unit(result[:resistor_bottom])
         er = "#{result[:relative_error]}%"
 
-        puts format("%-15s %-15s %-15s", rt, rb, er)
+        puts format('%-15s %-15s %-15s', rt, rb, er)
+      end
+    end
+  end
+
+  desc 'Calculate Inductor Values For DC-DC Converter Designs'
+  command :clacl do |c|
+    c.desc 'Vin(V)'
+    c.flag :vin, required: true, type: Float
+
+    c.desc 'Vout(V)'
+    c.flag :vout, required: true, type: Float
+
+    c.desc 'Iout(A)'
+    c.flag :iout, required: true, type: Float
+
+    c.desc 'fsw(Hz)'
+    c.flag :fsw, required: true, type: Float
+
+    c.desc 'ratio(None)'
+    c.flag :ratio, required: false, type: Float, default_value: 0.3
+
+    c.action do |_global_options, options, _args|
+      vin = options[:vin]
+      vout = options[:vout]
+      iout = options[:iout]
+      fsw = options[:fsw]
+      ratio = options[:ratio]
+
+      delta_IL = DCDCInductorParameters.calculator_delta_IL(iout, vout, vin, ratio)
+      inductance_min_value_uH = DCDCInductorParameters.calculator_inductance_min_uH(vin, vout, delta_IL, fsw)
+
+      closest_standard_inductance = DCDCInductorParameters.find_closest_standard_inductance(inductance_min_value_uH)
+
+      relative_error = DCDCInductorParameters.calculator_relative_error(inductance_min_value_uH,
+                                                                        closest_standard_inductance)
+
+      result = DCDCInductorParameters.select_standard_inductor(closest_standard_inductance)
+
+      # puts format('%-20s %-20s %-10s', 'InductanceMin', 'InductanceStandred', 'RelativeError')
+      # puts '-' * 50
+      # puts format('%-20s %-20s %-10s', inductance_min_value_uH.round(2), closest_standard_inductance, relative_error)
+
+      puts format('%-20s %10s', 'InductanceMin:', "#{inductance_min_value_uH.round(2)}uH")
+      puts format('%-20s %10s', 'InductanceStandred:', "#{closest_standard_inductance}uH")
+      puts format('%-20s %10s', 'RelativeError:', "#{relative_error}%")
+
+      puts '-' * 87
+      puts format('%-20s %-20s %-13s %-10s %-25s', 'Model', 'Size', 'Inductance', 'DCR', 'StaturationCurrent')
+      puts '-' * 87
+      result.each do |line|
+        puts format('%-20s %-20s %-13s %-10s %-25s', line['model'], line['size'], line['inductance'], line['dcr'],
+                    line['staturation_current'])
       end
     end
   end

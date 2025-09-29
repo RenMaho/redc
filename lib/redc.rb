@@ -1,4 +1,5 @@
 require_relative './redc/version'
+require 'csv'
 
 module DCDCFeedbackVoltageDividerResistorCombination
   E_series = {
@@ -53,5 +54,52 @@ module DCDCFeedbackVoltageDividerResistorCombination
     else
       value.round(2).to_s('F')
     end
+  end
+end
+
+module DCDCInductorParameters
+  INDUCTOR_DATA_PATH = File.expand_path(File.join('../lib/data', 'inductor_data.csv'), __dir__)
+
+  INDUCTOR_DATA = CSV.readlines(INDUCTOR_DATA_PATH, headers: true)
+
+  def self.inductor_data
+    INDUCTOR_DATA
+  end
+
+  def self.standard_inductances
+    @inductance ||= inductor_data['inductance'].uniq.map { |i| inductance_to_float(i) }
+  end
+
+  def self.inductance_to_float(inductance)
+    rule = /[1-9]\d*\.?\d*|0\.\d*[1-9]/
+    inductance.scan(rule).first.to_f
+  end
+
+  def self.inductance_to_uH(inductance)
+    inductance.to_f * 10**6
+  end
+
+  def self.find_closest_standard_inductance(inductance)
+    standard_inductances.reduce do |closest, num|
+      (inductance - num).abs < (inductance - closest).abs ? num : closest
+    end
+  end
+
+  def self.select_standard_inductor(closest_standard_inductance)
+    inductor_data.select do |line|
+      inductance_to_float(line['inductance']) == closest_standard_inductance
+    end
+  end
+
+  def self.calculator_delta_IL(iout, vout, vin, ratio)
+    ratio * iout * (vout / vin)
+  end
+
+  def self.calculator_inductance_min_uH(vin, vout, delta_IL, fsw)
+    inductance_to_uH(vin * (vout - vin) / (delta_IL * fsw * vout))
+  end
+
+  def self.calculator_relative_error(inductance, closest_standard_inductance)
+    (((inductance - closest_standard_inductance).abs / inductance) * 100).round(2)
   end
 end
