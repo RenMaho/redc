@@ -46,6 +46,23 @@ module DCDCFeedbackVoltageDividerResistorCombination
     (((resistor - closest_resistor).abs / resistor) * 100).round(2).to_s('F')
   end
 
+  def self.calculator_resistor_combination_results(resistor_top_range, resistor_bottmon_range, vout, vref)
+    results = []
+
+    resistor_top_range.each do |rt|
+      rb = calculator_resistor_bottom_value(vout, vref, rt)
+      closest_resistor_value = find_closest_resistor(rb, resistor_bottmon_range)
+      error = calculator_relative_error(rb, closest_resistor_value)
+
+      results << {
+        resistor_top: rt,
+        resistor_bottom: closest_resistor_value,
+        relative_error: error
+      }
+    end
+    results
+  end
+
   def self.format_unit(value)
     if value >= 1_000_000
       "#{(value / 1_000_000).round(2).to_s('F')}M"
@@ -55,12 +72,69 @@ module DCDCFeedbackVoltageDividerResistorCombination
       value.round(2).to_s('F')
     end
   end
+
+  def self.find_target_ohm_combination(results, target_resistor_top)
+    results.sort_by { |result| (result[:resistor_top] - target_resistor_top).abs }.first
+  end
+
+  def self.format_target_resistor_combination(results, target_resistor_top)
+    combination = find_target_ohm_combination(results, target_resistor_top)
+
+    head_lines = 40
+
+    puts '=' * head_lines
+    puts format('%-20s %-10s %-10s', 'PARAMETERS', 'VALUE', 'UNIT')
+    puts '-' * head_lines
+    puts format('%-20s %-10s %-10s', 'resistor top', format_unit(combination[:resistor_top]), 'Ω')
+    puts format('%-20s %-10s %-10s', 'resistor bottom', format_unit(combination[:resistor_bottom]), 'Ω')
+    puts format('%-20s %-10s %-10s', 'relative error', combination[:relative_error], '%')
+    puts '=' * head_lines
+  end
+
+  def self.format_resistor_combination_results(results)
+    results = results.sort_by { |r| r[:relative_error] }
+
+    header_lines = 60
+
+    puts '=' * header_lines
+    puts format('%-20s %-20s %-20s', 'RESISTOR_TOP(Ω)', 'RESISTOR_BOTTOM(Ω)', 'RELATIVE_ERROR(%)')
+    # puts '-' * 60
+
+    last_er = results[0][:relative_error]
+    results.each do |result|
+      rt = format_unit(result[:resistor_top])
+      rb = format_unit(result[:resistor_bottom])
+      er = result[:relative_error]
+
+      if er != last_er
+        puts '-' * header_lines
+        last_er = er
+      end
+
+      puts format('%-20s %-20s %-20s', rt, rb, er)
+    end
+    puts '=' * header_lines
+  end
 end
 
 module DCDCInductorParameters
   INDUCTOR_DATA_PATH = File.expand_path(File.join('../lib/data', 'inductor_data.csv'), __dir__)
 
   INDUCTOR_DATA = CSV.readlines(INDUCTOR_DATA_PATH, headers: true)
+
+  INDUCTOR_PRIORITY = {
+    '一体成型电感' => 0,
+    '小型化一体成型电感' => 1,
+    '立脚型一体成型电感' => 2,
+    '磁封胶功率电感' => 3,
+    '车规级一体成型电感' => 4,
+    '车规级小型一体成型电感' => 5,
+    '羰基一体成型电感' => 6,
+    '小型化一体成型电感T-CORE' => 7,
+    'T-CORE超大电流电感' => 8,
+    '铁氧体绕线' => 9,
+    '磁屏蔽罩' => 10
+  }.freeze
 
   def self.inductor_data
     INDUCTOR_DATA
@@ -89,6 +163,36 @@ module DCDCInductorParameters
     inductor_data.select do |line|
       inductance_to_float(line['inductance']) == closest_standard_inductance
     end
+  end
+
+  def self.format_calculated_result(inductance_min_uH, standard_inductance, relative_error)
+    header_lines = 45
+
+    # puts 'CALCULATION PARAMETER:'
+    puts '=' * header_lines
+    puts format('%-20s %-15s %-15s', 'PARAMETERS', 'VALUE', 'UNIT')
+    puts '-' * header_lines
+    puts format('%-20s %-15.2f %-15s', 'inductance minimum', inductance_min_uH.round(2), 'uH')
+    puts format('%-20s %-15.2f %-15s', 'inductance standard', standard_inductance.round(2), 'uH')
+    puts format('%-20s %-15.2f %-15s', 'relative error', relative_error.round(2), '%')
+    puts '=' * header_lines
+  end
+
+  def self.format_inductors_result(inductors)
+    header_lines = 90
+
+    # puts 'OPTIONAL MODEL LIST:'
+    puts '=' * header_lines
+    puts format('%-20s %-15s %-15s %-10s %-20s', 'SIZE', 'INDUCTANCE', 'DCR', 'I_SAT', 'TYPE')
+    puts '-' * header_lines
+    inductors = inductors.sort_by do |inductor|
+      INDUCTOR_PRIORITY[inductor['type']]
+    end
+    inductors.each do |inductor|
+      puts format('%-20s %-15s %-15s %-10s %-20s', inductor['size'], inductor['inductance'], inductor['dcr'], inductor['staturation_current'],
+                  inductor['type'])
+    end
+    puts '=' * header_lines
   end
 
   def self.calculator_delta_IL(iout, vout, vin, ratio)

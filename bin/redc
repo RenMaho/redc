@@ -22,6 +22,9 @@ class App
     c.desc 'Vref (V)'
     c.flag :vref, required: true, type: Float
 
+    c.desc 'ResistorTop (Ω)'
+    c.flag :rt, default_value: 1_000_000, required: true, type: Float
+
     c.desc 'E-Series (E6 E12 E24 E48 E96)'
     c.flag :serie, default_value: 'E24', required: true, type: String
 
@@ -29,44 +32,22 @@ class App
       vout = options[:vout]
       vref = options[:vref]
       serie = options[:serie]
-
-      resistor_combination_results = []
+      target_resistor_top = options[:rt]
 
       factor = DCDCFeedbackVoltageDividerResistorCombination.factor(serie)
-      # puts factor
 
       resistor_bottmon_range = DCDCFeedbackVoltageDividerResistorCombination.resistor_range(factor)
-      # puts bottmon_resistor_range
 
       resistor_top_multiple = (3..6).map { |index| 10**index }
-      # puts top_resistor_multiple
 
       resistor_top_range = factor.product(resistor_top_multiple).map { |a, b| BigDecimal(a.to_s) * b }
-      # puts top_resistor_range
 
-      resistor_top_range.each do |rt|
-        rb = DCDCFeedbackVoltageDividerResistorCombination.calculator_resistor_bottom_value(vout, vref, rt)
-        closest_resistor_value = DCDCFeedbackVoltageDividerResistorCombination.find_closest_resistor(rb,
-                                                                                                     resistor_bottmon_range)
-        error = DCDCFeedbackVoltageDividerResistorCombination.calculator_relative_error(rb, closest_resistor_value)
+      results = DCDCFeedbackVoltageDividerResistorCombination.calculator_resistor_combination_results(
+        resistor_top_range, resistor_bottmon_range, vout, vref
+      )
 
-        resistor_combination_results << {
-          resistor_top: rt,
-          resistor_bottom: closest_resistor_value,
-          relative_error: error
-        }
-      end
-
-      resistor_combination_results = resistor_combination_results.sort_by { |result| result[:relative_error] }
-      puts format('%-15s %-15s %-15s', 'ResistorTop', 'ResistorBottom', 'RelativeError')
-      puts '-' * 45
-      resistor_combination_results.each do |result|
-        rt = DCDCFeedbackVoltageDividerResistorCombination.format_unit(result[:resistor_top])
-        rb = DCDCFeedbackVoltageDividerResistorCombination.format_unit(result[:resistor_bottom])
-        er = "#{result[:relative_error]}%"
-
-        puts format('%-15s %-15s %-15s', rt, rb, er)
-      end
+      DCDCFeedbackVoltageDividerResistorCombination.format_target_resistor_combination(results, target_resistor_top)
+      DCDCFeedbackVoltageDividerResistorCombination.format_resistor_combination_results(results)
     end
   end
 
@@ -102,23 +83,11 @@ class App
       relative_error = DCDCInductorParameters.calculator_relative_error(inductance_min_value_uH,
                                                                         closest_standard_inductance)
 
-      result = DCDCInductorParameters.select_standard_inductor(closest_standard_inductance)
+      inductors = DCDCInductorParameters.select_standard_inductor(closest_standard_inductance)
 
-      # puts format('%-20s %-20s %-10s', 'InductanceMin', 'InductanceStandred', 'RelativeError')
-      # puts '-' * 50
-      # puts format('%-20s %-20s %-10s', inductance_min_value_uH.round(2), closest_standard_inductance, relative_error)
-
-      puts format('%-20s %10s', 'InductanceMin:', "#{inductance_min_value_uH.round(2)}uH")
-      puts format('%-20s %10s', 'InductanceStandred:', "#{closest_standard_inductance}uH")
-      puts format('%-20s %10s', 'RelativeError:', "#{relative_error}%")
-
-      puts '-' * 87
-      puts format('%-20s %-20s %-13s %-10s %-25s', 'Model', 'Size', 'Inductance', 'DCR', 'StaturationCurrent')
-      puts '-' * 87
-      result.each do |line|
-        puts format('%-20s %-20s %-13s %-10s %-25s', line['model'], line['size'], line['inductance'], line['dcr'],
-                    line['staturation_current'])
-      end
+      DCDCInductorParameters.format_calculated_result(inductance_min_value_uH, closest_standard_inductance,
+                                                      relative_error)
+      DCDCInductorParameters.format_inductors_result(inductors)
     end
   end
 end
