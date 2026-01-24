@@ -207,3 +207,91 @@ module DCDCInductorParameters
     (((inductance - closest_standard_inductance).abs / inductance) * 100).round(2)
   end
 end
+
+module RCDelayCalculator
+  RESISTOR_E24 = [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5,
+                  8.2, 9.1]
+
+  CAPACITOR_E12 = [1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2]
+
+  def self.resistor_range
+    resistor_multiple = (3..6).map { |index| 10**index }
+
+    resistors = RCDelayCalculator::RESISTOR_E24.product(resistor_multiple).map { |a, b| BigDecimal(a.to_s) * b }
+
+    resistors.select { |resistor| resistor.between?(1000, 1_000_000) }
+  end
+
+  def self.capacitor_range
+    capacitor_multiple = (-10..-4).map { |index| 10**index }
+
+    capacitors = RCDelayCalculator::CAPACITOR_E12.product(capacitor_multiple).map { |a, b| BigDecimal(a.to_s) * b }
+
+    capacitors.select { |capacitor| capacitor.between?(10**-10, 10**-4) }
+  end
+
+  def self.time_constant(resistance, capacitance)
+    resistance * capacitance
+  end
+
+  def self.delay_time(resistance, capacitance, voltage_rc, voltage_target)
+    return nil if voltage_target > voltage_rc
+
+    -time_constant(resistance, capacitance) * Math.log((voltage_rc - voltage_target) / voltage_rc)
+  end
+
+  def self.closest_capacitor_value(capacitor_range, resistance, target_delay_time, voltage_rc, voltage_target)
+    capacitance = -target_delay_time / (Math.log((voltage_rc - voltage_target) / voltage_rc) * resistance)
+
+    capacitor_range.min_by { |standard_capacitor| (standard_capacitor - capacitance).abs }
+  end
+
+  def self.closest_resistance(resistor_range, capacitance, target_delay_time, voltage_rc, voltage_target)
+    resistance = -target_delay_time / (Math.log((voltage_rc - voltage_target) / voltage_rc) * capacitance)
+
+    resistor_range.min_by { |standard_resistance| (standard_resistance - resistance).abs }
+  end
+
+  def self.calculator_relative_error(target_delay_time, closest_delay_time)
+    (((target_delay_time - closest_delay_time).abs / target_delay_time) * 100).round(2)
+  end
+
+  def self.calculator_rc_combination_results(capacitor_range, resistor_range, target_delay_time,
+                                             voltage_rc, voltage_target)
+    results = []
+
+    resistor_range.each do |resistance|
+      closest_capacitor_value = closest_capacitor_value(capacitor_range, resistance, target_delay_time, voltage_rc,
+                                                        voltage_target)
+      closest_delay_time = delay_time(resistance, closest_capacitor_value, voltage_rc, voltage_target)
+      error = calculator_relative_error(target_delay_time, closest_delay_time)
+
+      results << {
+        resistance: resistance,
+        capacitance: closest_capacitor_value,
+        target_delay_time: target_delay_time,
+        delay_time: closest_delay_time,
+        relative_error: error
+      }
+    end
+    results
+  end
+
+  def self.format_rc_results(rc_results, rows)
+    rc_results = rc_results.sort_by { |result| result[:relative_error] }
+
+    rows = rows <= rc_results.size ? rows : rc_results.size
+
+    header_lines = 106
+
+    puts '=' * header_lines
+    puts format('%-20s %-20s %-25s %-20s %-20s', 'RESISTANCE(KΩ)', 'CAPACITANCE(µF)', 'TARGET_DELAY_TIME(S)',
+                'DELAY_TIME(S)', 'RELATIVE_ERROR(%)')
+    puts '-' * header_lines
+    rows.times do |i|
+      rc_result = rc_results[i]
+      puts format('%-20s %-20s %-25s %-20s %-20s', (rc_result[:resistance] / 1000.0).to_s('F'), (rc_result[:capacitance] * 10**6).to_s('F'),
+                  rc_result[:target_delay_time], rc_result[:delay_time].round(3).to_s('F'), rc_result[:relative_error].round(3).to_s('F'))
+    end
+  end
+end
