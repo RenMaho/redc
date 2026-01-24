@@ -99,6 +99,9 @@ class App
     # c.desc 'Capacitance(µF)'
     # c.flag %i[cap c], required: true, type: Float
 
+    c.desc 'Calculator Mode Switch, `charge` or `discharge`'
+    c.flag %i[mode m], required: true, must_match: %w[charge discharge]
+
     c.desc 'Delay Time(S)'
     c.flag %i[dt d], required: true, type: Float
 
@@ -112,6 +115,8 @@ class App
     c.flag %i[rows r], required: false, type: Integer, default_value: 5
 
     c.action do |_global_options, options, _args|
+      mode = options[:mode].to_sym
+
       target_delay_time = options[:dt]
       voltage_rc = options[:vrc]
       voltage_target = options[:vt]
@@ -121,9 +126,8 @@ class App
       resistor_range = RCDelayCalculator.resistor_range
       capacitor_range = RCDelayCalculator.capacitor_range
 
-      rc_results = RCDelayCalculator.calculator_rc_combination_results(capacitor_range, resistor_range, target_delay_time,
+      rc_results = RCDelayCalculator.calculator_rc_combination_results(mode, capacitor_range, resistor_range, target_delay_time,
                                                                        voltage_rc, voltage_target)
-
       RCDelayCalculator.format_rc_results(rc_results, rows)
     end
   end

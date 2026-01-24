@@ -240,39 +240,78 @@ module RCDelayCalculator
     -time_constant(resistance, capacitance) * Math.log((voltage_rc - voltage_target) / voltage_rc)
   end
 
-  def self.closest_capacitor_value(capacitor_range, resistance, target_delay_time, voltage_rc, voltage_target)
-    capacitance = -target_delay_time / (Math.log((voltage_rc - voltage_target) / voltage_rc) * resistance)
-
-    capacitor_range.min_by { |standard_capacitor| (standard_capacitor - capacitance).abs }
+  def self.closest_value(range, value)
+    range.min_by { |standard| (standard - value).abs }
   end
 
-  def self.closest_resistance(resistor_range, capacitance, target_delay_time, voltage_rc, voltage_target)
-    resistance = -target_delay_time / (Math.log((voltage_rc - voltage_target) / voltage_rc) * capacitance)
-
-    resistor_range.min_by { |standard_resistance| (standard_resistance - resistance).abs }
-  end
+  # def self.closest_capacitor_value(capacitor_range, resistance, target_delay_time, voltage_rc, voltage_target)
+  #   capacitance = -target_delay_time / (Math.log((voltage_rc - voltage_target) / voltage_rc) * resistance)
+  #
+  #   capacitor_range.min_by { |standard_capacitor| (standard_capacitor - capacitance).abs }
+  # end
+  #
+  # def self.closest_resistance(resistor_range, capacitance, target_delay_time, voltage_rc, voltage_target)
+  #   resistance = -target_delay_time / (Math.log((voltage_rc - voltage_target) / voltage_rc) * capacitance)
+  #
+  #   resistor_range.min_by { |standard_resistance| (standard_resistance - resistance).abs }
+  # end
 
   def self.calculator_relative_error(target_delay_time, closest_delay_time)
     (((target_delay_time - closest_delay_time).abs / target_delay_time) * 100).round(2)
   end
 
-  def self.calculator_rc_combination_results(capacitor_range, resistor_range, target_delay_time,
+  def self.calculator_rc_combination_results(mode, capacitor_range, resistor_range, target_delay_time,
                                              voltage_rc, voltage_target)
+    case mode
+    when :charge
+      calculator_rc_combination_charge(capacitor_range, resistor_range, target_delay_time, voltage_rc, voltage_target)
+    when :discharge
+      calculator_rc_combination_discharge(capacitor_range, resistor_range, target_delay_time, voltage_rc,
+                                          voltage_target)
+    end
+  end
+
+  def self.rc_combination_charge_result(resistance, capacitance, target_delay_time, delay_time, relative_error)
+    {
+      resistance: resistance,
+      capacitance: capacitance,
+      target_delay_time: target_delay_time,
+      delay_time: delay_time,
+      relative_error: relative_error
+    }
+  end
+
+  def self.calculator_rc_combination_charge(capacitor_range, resistor_range, target_delay_time, voltage_rc,
+                                            voltage_target)
+    # t = -RC * Ln(1 - (Uc / Us))
     results = []
 
     resistor_range.each do |resistance|
-      closest_capacitor_value = closest_capacitor_value(capacitor_range, resistance, target_delay_time, voltage_rc,
-                                                        voltage_target)
-      closest_delay_time = delay_time(resistance, closest_capacitor_value, voltage_rc, voltage_target)
+      capacitance = -target_delay_time / (Math.log(1 - (voltage_target / voltage_rc)) * resistance)
+      closest_capacitance = closest_value(capacitor_range, capacitance)
+      closest_delay_time = -time_constant(resistance,
+                                          closest_capacitance) * Math.log((voltage_rc - voltage_target) / voltage_rc)
       error = calculator_relative_error(target_delay_time, closest_delay_time)
 
-      results << {
-        resistance: resistance,
-        capacitance: closest_capacitor_value,
-        target_delay_time: target_delay_time,
-        delay_time: closest_delay_time,
-        relative_error: error
-      }
+      results << rc_combination_charge_result(resistance, closest_capacitance, target_delay_time, closest_delay_time,
+                                              error)
+    end
+
+    results
+  end
+
+  def self.calculator_rc_combination_discharge(capacitor_range, resistor_range, target_delay_time, voltage_rc,
+                                               voltage_target)
+    # t = -RC * Ln(Uc / Uo)
+    results = []
+
+    capacitor_range.each do |capacitance|
+      resistance = -target_delay_time / (capacitance * Math.log(voltage_target / voltage_rc))
+      closest_resistance = closest_value(resistor_range, resistance)
+      closest_delay_time = -time_constant(closest_resistance, capacitance) * Math.log(voltage_target / voltage_rc)
+      error = calculator_relative_error(target_delay_time, closest_delay_time)
+      results << rc_combination_charge_result(closest_resistance, capacitance, target_delay_time, closest_delay_time,
+                                              error)
     end
     results
   end
