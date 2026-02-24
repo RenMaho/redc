@@ -199,8 +199,17 @@ module DCDCInductorParameters
     ratio * iout * (vout / vin)
   end
 
-  def self.calculator_inductance_min_uH(vin, vout, delta_IL, fsw)
+  # def self.calculator_inductance_min_uH(vin, vout, delta_IL, fsw)
+  #   inductance_to_uH(vin * (vout - vin) / (delta_IL * fsw * vout))
+  # end
+
+  def self.boost_inductor(vin, vout, fsw, iout, ratio)
+    delta_IL = calculator_delta_IL(iout, vout, vin, ratio)
     inductance_to_uH(vin * (vout - vin) / (delta_IL * fsw * vout))
+  end
+
+  def self.buck_inductor(vin, vout, fsw, iout, ratio)
+    inductance_to_uH(vout * (vin - vout) / (fsw * vin * ratio * iout))
   end
 
   def self.calculator_relative_error(inductance, closest_standard_inductance)

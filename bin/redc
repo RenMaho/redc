@@ -53,6 +53,9 @@ class App
 
   desc 'Calculate Inductor Values For DC-DC Converter Designs'
   command :clacl do |c|
+    c.desc 'Type(boost/buck)'
+    c.flag :type, required: true, type: String, default_value: 'buck'
+
     c.desc 'Vin(V)'
     c.flag :vin, required: true, type: Float
 
@@ -69,14 +72,28 @@ class App
     c.flag :ratio, required: false, type: Float, default_value: 0.3
 
     c.action do |_global_options, options, _args|
-      vin = options[:vin]
-      vout = options[:vout]
-      iout = options[:iout]
-      fsw = options[:fsw]
-      ratio = options[:ratio]
+      type = options[:type].downcase
+      vin = options[:vin].to_f
+      vout = options[:vout].to_f
+      iout = options[:iout].to_f
+      fsw = options[:fsw].to_f
+      ratio = options[:ratio].to_f
 
-      delta_IL = DCDCInductorParameters.calculator_delta_IL(iout, vout, vin, ratio)
-      inductance_min_value_uH = DCDCInductorParameters.calculator_inductance_min_uH(vin, vout, delta_IL, fsw)
+      case type
+      when 'buck'
+        raise "Buck converter requires Vout < Vin (given: Vout=#{vout} V, Vin=#{vin} V)" if vout >= vin
+      when 'boost'
+        raise "Boost converter requires Vout > Vin (given: Vout=#{vout} V, Vin=#{vin} V)" if vout <= vin
+      else
+        raise "Unsupported topology type: #{type}. Only 'buck' or 'boost' are supported."
+      end
+
+      inductance_min_value_uH = case type
+                                when 'buck'
+                                  DCDCInductorParameters.buck_inductor(vin, vout, fsw, iout, ratio)
+                                when 'boost'
+                                  DCDCInductorParameters.boost_inductor(vin, vout, fsw, iout, ratio)
+                                end
 
       closest_standard_inductance = DCDCInductorParameters.find_closest_standard_inductance(inductance_min_value_uH)
 
